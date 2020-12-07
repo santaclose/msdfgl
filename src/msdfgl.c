@@ -19,8 +19,6 @@ typedef SSIZE_T ssize_t;
 #include "msdfgl_map.h"
 #include "msdfgl_serializer.h"
 
-#include "_msdfgl_shaders.h" /* Auto-generated */
-
 /* Returns 1 if the code is a unicode control character. */
 static inline int _msdfgl_is_control(int32_t code) {
     return (code <= 31) || (code >= 128 && code <= 159);
@@ -77,6 +75,46 @@ struct _msdfgl_atlas {
 
 };
 
+
+int readFile(char** pointerToReturn, const char* filePath)
+{
+    /* declare a file pointer */
+    FILE* infile;
+    char* buffer;
+    long numbytes;
+
+    /* open an existing file for reading */
+    infile = fopen(filePath, "rb");
+
+    /* quit if the file does not exist */
+    if (infile == NULL)
+        return 1;
+
+    /* Get the number of bytes */
+    fseek(infile, 0L, SEEK_END);
+    numbytes = ftell(infile);
+    //printf("%ld\n", numbytes);
+
+    /* reset the file position indicator to
+    the beginning of the file */
+    fseek(infile, 0L, SEEK_SET);
+
+    /* grab sufficient memory for the
+    buffer to hold the text */
+    buffer = (char*)calloc(numbytes+1l, sizeof(char));
+
+    /* memory error */
+    if (buffer == NULL)
+        return 1;
+
+    /* copy all the text into the buffer */
+    fread(buffer, sizeof(char), numbytes, infile);
+    fclose(infile);
+
+    *pointerToReturn = buffer;
+
+    return 1;
+}
 
 struct _msdfgl_font {
     char *font_name;
@@ -233,6 +271,13 @@ msdfgl_context_t msdfgl_create_context(const char *version) {
         free(ctx);
         return NULL;
     }
+
+    char* _msdf_vertex, *_msdf_fragment, *_font_vertex, *_font_geometry, *_font_fragment;
+    if (!readFile(&_msdf_vertex, "assets/shaders/msdf/msdf_vertex.glsl")) fprintf(stderr, "Error loading shader\n");
+    if (!readFile(&_msdf_fragment, "assets/shaders/msdf/msdf_fragment.glsl")) fprintf(stderr, "Error loading shader\n");
+    if (!readFile(&_font_vertex, "assets/shaders/msdf/font_vertex.glsl")) fprintf(stderr, "Error loading shader\n");
+    if (!readFile(&_font_fragment, "assets/shaders/msdf/font_fragment.glsl")) fprintf(stderr, "Error loading shader\n");
+    if (!readFile(&_font_geometry, "assets/shaders/msdf/font_geometry.glsl")) fprintf(stderr, "Error loading shader\n");
 
     glGetIntegerv(GL_MAX_TEXTURE_SIZE, &ctx->_max_texture_size);
 
@@ -964,7 +1009,7 @@ void msdfgl_geometry(float *x, float *y, msdfgl_font_t font, float size,
     free(s);
 }
 
-float msdfgl_printf(float x, float y, msdfgl_font_t font, float size, int32_t color,
+float msdfgl_printf(float x, float y, int align, msdfgl_font_t font, float size, int32_t color,
                     GLfloat *projection, enum msdfgl_printf_flags flags, const void *fmt,
                     ...) {
     va_list argp;
@@ -996,7 +1041,36 @@ float msdfgl_printf(float x, float y, msdfgl_font_t font, float size, int32_t co
         return x;
     }
 
+    // ---- allow aligning ----
     size_t buf_idx = 0;
+    float startX = x;
+    float endX = startX;
+    if (align == 1 || align == 2) {
+        for (size_t i = 0; buf_idx < bufsize; ++i) {
+            if (flags & MSDFGL_WCHAR)
+                glyphs[i].key = (int32_t)((wchar_t*)s)[buf_idx++];
+            else if (flags & MSDFGL_UTF8)
+                glyphs[i].key = parse_utf8(&((uint8_t*)s)[buf_idx], &buf_idx);
+            else
+                glyphs[i].key = (int32_t)((char*)s)[buf_idx++];
+            msdfgl_map_item_t* e = msdfgl_map_get_or_add(font, glyphs[i].key);
+            FT_Vector kerning = { 0, 0 };
+            if (flags & MSDFGL_KERNING && i && FT_HAS_KERNING(font->face)) {
+                FT_Get_Kerning(font->face, FT_Get_Char_Index(font->face, glyphs[i - 1].key),
+                    FT_Get_Char_Index(font->face, glyphs[i].key),
+                    FT_KERNING_UNSCALED, &kerning);
+            }
+            endX += (e->advance[0] + kerning.x) * (size * font->context->dpi[0] / 72.0f) /
+                font->face->units_per_EM;
+        }
+    }
+    if (align == 1)
+        x -= (endX - startX) * 0.5f;
+    else if (align == 2)
+        x -= (endX - startX);
+    // ---------------
+
+    buf_idx = 0;
     for (size_t i = 0; buf_idx < bufsize; ++i) {
         glyphs[i].x = x;
         glyphs[i].y = y;
