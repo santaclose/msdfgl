@@ -231,7 +231,7 @@ enum msdfgl_printf_flags {
  * Returns the x (y if vertical drawing is enabled) position of the glyph that
  * would follow the rendered ones.
  */
-MSDFGL_EXPORT float msdfgl_printf(float x, float y, msdfgl_font_t font, float size,
+MSDFGL_EXPORT float msdfgl_printf(float x, float y, int align, msdfgl_font_t font, float size,
                                   int32_t color, GLfloat *projection,
                                   enum msdfgl_printf_flags flags, const void *fmt, ...);
 
