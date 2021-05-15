@@ -235,6 +235,9 @@ MSDFGL_EXPORT float msdfgl_printf(float x, float y, int align, msdfgl_font_t fon
                                   int32_t color, GLfloat *projection,
                                   enum msdfgl_printf_flags flags, const void *fmt, ...);
 
+MSDFGL_EXPORT float msdfgl_measure(msdfgl_font_t font, float size, unsigned int limit,
+                                   GLfloat *projection, enum msdfgl_printf_flags flags,
+                                   const void *fmt, ...);
 
 /**
  * Calculate the width or height of the text.
